@@ -106,14 +106,10 @@ python fetch_and_merge_tl.py --outdir ./schemas
 **Q1：为什么没发布新的 Release？**  
 A：上游 TL **没变** 或本次合并结果与上次**完全一致**。查看 `schemas/metadata.json` 的 `entries[].sha/commit_date` 即可确认。
 
-**Q2：GitHub Actions 有“缓存”吗？**  
-A：默认**没有**。每次是干净的 runner。只有你手动用了 `actions/cache` 或 Artifact 才有持久化。  
-误判“像缓存”的常见原因是：上游无变化、`.gitignore` 忽略了产物、或 diff 检测顺序不当（本仓库的工作流已处理好）。
-
-**Q3：如何调整频率？**  
+**Q2：如何调整频率？**  
 A：在 `tl-merge.yml` 里改 `schedule.cron`，例如每 15 分钟：`*/15 * * * *`（UTC）。
 
-**Q4：如何添加新的 TL 来源？**  
+**Q3：如何添加新的 TL 来源？**  
 A：编辑 `fetch_and_merge_tl.py` 中的 `SOURCES` 列表，按 `{owner, repo, path, ref}` 增加即可。
 
 ---
