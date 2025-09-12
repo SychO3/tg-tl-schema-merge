@@ -3,7 +3,7 @@ name: Merge Telegram TL
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 * * * *"   # 每小时一次（UTC）
+    - cron: "0 */6 * * *"   # 每6小时（UTC 00:00/06:00/12:00/18:00）
 
 permissions:
   contents: write
@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install jq (for composing release body)
+      - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Run TL fetch & merge
@@ -35,13 +35,13 @@ jobs:
         run: |
           python fetch_and_merge_tl.py --outdir schemas
 
-      # 先把产物放到根目录 & 计算哈希（这样这些改动也会被后面的 diff 检出）
+      # 先把产物放到根目录并生成哈希，确保这些变化也参与 diff 判定
       - name: Prepare root artifacts
         run: |
           cp -f schemas/merged.tl ./merged.tl
           sha256sum merged.tl > merged.tl.sha256
 
-      # VERY IMPORTANT：用 "intent-to-add" 把未跟踪文件纳入 diff 判定
+      # 把未跟踪文件以 "intent-to-add" 方式纳入 diff 检测
       - name: Detect changes
         id: diff
         run: |
@@ -58,7 +58,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "chore(tl): hourly update merged.tl [skip ci]"
+          git commit -m "chore(tl): 6-hourly update merged.tl [skip ci]"
           git push
 
       - name: Compose tag & release body (if changed)
@@ -77,7 +77,7 @@ jobs:
             echo "Sources:"
             jq -r '.entries[] | "- \(.repo) @ \(.sha) (\(.commit_date))"' schemas/metadata.json
             echo
-            echo "SHA256:"
+            echo "SHA256 (merged.tl):"
             cat merged.tl.sha256
             echo
             echo "See CHANGELOG.txt for unified diffs."
@@ -85,6 +85,7 @@ jobs:
 
       - name: Create GitHub Release (if changed)
         if: steps.diff.outputs.changed == 'true'
+        id: gh_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
@@ -94,6 +95,34 @@ jobs:
             merged.tl
             merged.tl.sha256
 
+      # 有更新就推送 Telegram（需要你在仓库 Secrets 里配置 Token & Chat ID）
+      - name: Notify Telegram (if changed)
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELEASE_URL: ${{ steps.gh_release.outputs.html_url }}
+        run: |
+          if [ -z "$TG_TOKEN" ] || [ -z "$TG_CHAT" ]; then
+            echo "Telegram secrets not set; skipping."
+            exit 0
+          fi
+          {
+            echo "TL schema updated ✅"
+            echo "Tag: ${{ steps.tag.outputs.tag }}"
+            echo "Release: ${RELEASE_URL}"
+            echo
+            echo "Sources:"
+            jq -r '.entries[] | "- \(.repo) @ \(.sha) (\(.commit_date))"' schemas/metadata.json
+            echo
+            echo "SHA256 (merged.tl):"
+            cat merged.tl.sha256
+          } > msg.txt
+          curl -sS "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode chat_id="${TG_CHAT}" \
+            --data-urlencode text@msg.txt
+
+      # 便于从 Actions 页面下载全部产物
       - name: Upload artifacts (if changed)
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
