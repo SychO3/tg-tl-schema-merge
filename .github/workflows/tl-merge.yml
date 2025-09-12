@@ -6,7 +6,7 @@ on:
     - cron: "0 * * * *"   # 每小时一次（UTC）
 
 permissions:
-  contents: write   # 需要写权限来 push 与创建 Release
+  contents: write
 
 concurrency:
   group: tl-merge
@@ -28,10 +28,8 @@ jobs:
 
       - name: Run TL fetch & merge
         env:
-          # 使用内置 token 提升 GitHub API 限额
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python --version
           python fetch_and_merge_tl.py --outdir schemas
 
       - name: Detect changes
@@ -43,7 +41,13 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
-      # 仅在有变动时提交，确保工作区中有“上一版本状态”，方便下次对比
+      # 把 merged.tl 复制到仓库根目录，并在根目录生成哈希（仅在变更时执行）
+      - name: Copy merged.tl to repo root & build checksum (if changed)
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          cp schemas/merged.tl ./merged.tl
+          sha256sum merged.tl > merged.tl.sha256
+
       - name: Commit changes (if changed)
         if: steps.diff.outputs.changed == 'true'
         run: |
@@ -53,45 +57,28 @@ jobs:
           git commit -m "chore(tl): hourly update merged.tl [skip ci]"
           git push
 
-      # 仅在有变动时，计算哈希
-      - name: Build checksums (if changed)
-        if: steps.diff.outputs.changed == 'true'
-        run: |
-          cd schemas
-          sha256sum merged.tl > merged.tl.sha256
-          # 也可以顺手给 latest.tl 算一个（可选）
-          # sha256sum latest.tl > latest.tl.sha256
-
-      # 仅在有变动时，生成 tag 名与标题
       - name: Compose tag & title (if changed)
         if: steps.diff.outputs.changed == 'true'
         id: tag
         run: |
           DT_UTC=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           DT_TAG=$(date -u +'%Y%m%d%H%M%S')
-
-          # 取两个源的短 SHA（元数据里 entries 顺序不重要，只是用于构造可辨识 tag）
           SHA1=$(jq -r '.entries[0].sha' schemas/metadata.json | cut -c1-7)
           SHA2=$(jq -r '.entries[1].sha' schemas/metadata.json | cut -c1-7)
-
-          # 构造 tag 与标题
           echo "tag=tl-${DT_TAG}-${SHA1}-${SHA2}" >> $GITHUB_OUTPUT
           echo "title=TL Merge ${DT_UTC}" >> $GITHUB_OUTPUT
-
-          # 生成基础 Release 说明（包含来源与提交时间）
           {
             echo "Automated semantic merge of Telegram TL schemas."
             echo
             echo "Sources:"
             jq -r '.entries[] | "- \(.repo) @ \(.sha) (\(.commit_date))"' schemas/metadata.json
             echo
-            echo "SHA256:"
-            cat schemas/merged.tl.sha256
+            echo "SHA256 (root):"
+            cat merged.tl.sha256
             echo
-            echo "See CHANGELOG.txt in artifacts/repo for unified diffs."
+            echo "See CHANGELOG.txt for unified diffs."
           } > RELEASE_BODY.txt
 
-      # 仅在有变动时，创建 Release 并上传 merged.tl + 哈希文件
       - name: Create GitHub Release (if changed)
         if: steps.diff.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
@@ -100,18 +87,17 @@ jobs:
           name: ${{ steps.tag.outputs.title }}
           body_path: RELEASE_BODY.txt
           files: |
-            schemas/merged.tl
-            schemas/merged.tl.sha256
+            merged.tl
+            merged.tl.sha256
 
-      # 可选：上传构件，方便从 Action 页面直接下载
       - name: Upload artifacts (if changed)
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: schemas
           path: |
-            schemas/merged.tl
-            schemas/merged.tl.sha256
+            merged.tl
+            merged.tl.sha256
             schemas/latest.tl
             schemas/CHANGELOG.txt
             schemas/metadata.json
