@@ -1,0 +1,54 @@
+name: Merge Telegram TL
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 * * * *"   # 每小时一次（UTC）
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tl-merge
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run TL fetch & merge
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python fetch_and_merge_tl.py --outdir schemas
+
+      - name: Commit changes (if any)
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore(tl): hourly update merged.tl [skip ci]"
+          git push
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemas
+          path: |
+            schemas/merged.tl
+            schemas/CHANGELOG.txt
