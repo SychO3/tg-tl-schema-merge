@@ -3,7 +3,7 @@ name: Merge Telegram TL
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 */6 * * *"   # 每6小时（UTC 00:00/06:00/12:00/18:00）
+    - cron: "0 */6 * * *"   # 每6小时（UTC 00/06/12/18）
 
 permissions:
   contents: write
@@ -35,22 +35,16 @@ jobs:
         run: |
           python fetch_and_merge_tl.py --outdir schemas
 
-      # 先把产物放到根目录并生成哈希，确保这些变化也参与 diff 判定
-      - name: Prepare root artifacts
-        run: |
-          cp -f schemas/merged.tl ./merged.tl
-          sha256sum merged.tl > merged.tl.sha256
-
-      # 把未跟踪文件以 "intent-to-add" 方式纳入 diff 检测
       - name: Detect changes
         id: diff
         run: |
-          git add -N merged.tl merged.tl.sha256 schemas/merged.tl schemas/latest.tl schemas/CHANGELOG.txt schemas/metadata.json || true
-          if git diff --quiet; then
+          git add -N schemas/merged.tl schemas/merged.tl.sha256 || true
+          if git diff --quiet -- schemas/merged.tl schemas/merged.tl.sha256; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
+
 
       - name: Commit changes (if changed)
         if: steps.diff.outputs.changed == 'true'
@@ -77,8 +71,8 @@ jobs:
             echo "Sources:"
             jq -r '.entries[] | "- \(.repo) @ \(.sha) (\(.commit_date))"' schemas/metadata.json
             echo
-            echo "SHA256 (merged.tl):"
-            cat merged.tl.sha256
+            echo "SHA256 (schemas/merged.tl):"
+            cat schemas/merged.tl.sha256
             echo
             echo "See CHANGELOG.txt for unified diffs."
           } > RELEASE_BODY.txt
@@ -92,10 +86,9 @@ jobs:
           name: ${{ steps.tag.outputs.title }}
           body_path: RELEASE_BODY.txt
           files: |
-            merged.tl
-            merged.tl.sha256
+            schemas/merged.tl
+            schemas/merged.tl.sha256
 
-      # 有更新就推送 Telegram（需要你在仓库 Secrets 里配置 Token & Chat ID）
       - name: Notify Telegram (if changed)
         if: steps.diff.outputs.changed == 'true'
         env:
@@ -115,22 +108,21 @@ jobs:
             echo "Sources:"
             jq -r '.entries[] | "- \(.repo) @ \(.sha) (\(.commit_date))"' schemas/metadata.json
             echo
-            echo "SHA256 (merged.tl):"
-            cat merged.tl.sha256
+            echo "SHA256 (schemas/merged.tl):"
+            cat schemas/merged.tl.sha256
           } > msg.txt
           curl -sS "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TG_CHAT}" \
             --data-urlencode text@msg.txt
 
-      # 便于从 Actions 页面下载全部产物
       - name: Upload artifacts (if changed)
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: schemas
           path: |
-            merged.tl
-            merged.tl.sha256
+            schemas/merged.tl
+            schemas/merged.tl.sha256
             schemas/latest.tl
             schemas/CHANGELOG.txt
             schemas/metadata.json
