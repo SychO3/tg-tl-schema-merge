@@ -3,7 +3,7 @@ name: Merge Telegram TL
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 */6 * * *"   # 每6小时（UTC 00/06/12/18）
+    - cron: "0 */1 * * *"  # every hour
 
 permissions:
   contents: write
