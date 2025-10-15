@@ -2,38 +2,25 @@
 
 [![Workflow Status](https://github.com/SychO3/tg-tl-schema-merge/actions/workflows/tl-merge.yml/badge.svg)](https://github.com/SychO3/tg-tl-schema-merge/actions/workflows/tl-merge.yml)
 
-> 自动从 **tdesktop** 与 **tdlib** 拉取 Telegram TL schema，进行**语义合并**，并在**内容变更**时：
+> 自动从 **tdlib (td)** 与 **tdesktop** 拉取 Telegram TL schema，进行合并，并在**内容变更**时：
 > - 生成 `merged.tl`（仓库根目录与 `schemas/` 中各一份）
 > - 生成 `merged.tl.sha256`（根目录）
 > - 追加 `schemas/CHANGELOG.txt`（含统一 diff 预览）
 > - 发布 GitHub **Release**（附带 `merged.tl` 与其 SHA256）
 
 - 🔁 **频率**：默认 **每小时一次**（UTC，GitHub Actions `cron`）
-- 🗂 **来源**：
-  - `telegramdesktop/tdesktop` → `Telegram/SourceFiles/mtproto/scheme/api.tl`（`dev` 分支）
+- 🗂 **来源**（以 **td** 为主，**tdesktop** 为补充）：
   - `tdlib/td` → `td/generate/scheme/telegram_api.tl`（`master` 分支）
+  - `telegramdesktop/tdesktop` → `Telegram/SourceFiles/mtproto/scheme/api.tl`（`dev` 分支）
 
 ---
 
 ## 特性
 
-- **语义合并**（不是简单按行去重）
-  - 解析 `---types---` / `---functions---`
-  - 将定义解析为 `name[#id] params = result;`
-  - **去重键**优先使用 `#id`；没有 `#id` 时使用 `name + 规范化参数 + 结果 + 所属段落`
-  - 冲突策略：**以提交时间较新**的来源为准
-  - 输出使用**规范分隔**：
-    ```
-    ---types---
-    ... all types ...
-    ---functions---
-    ... all functions ...
-    ```
-- **头部注释与后处理**
-  - 顶部加入本次合并元信息（来源 repo、path、commit、时间、大小等）
-  - 在最终 `merged.tl` 中，用正则 `^\s*-+\s*types\s*-+\s*$`（不区分大小写）定位 `types` 分隔行，**将其上方所有内容注释化**（已有 `//` 的不重复加）
-- **只在变更时提交与发版**：降低无意义提交与 Release 噪音
-- **可复现**：下载使用 **以 commit SHA 固定**的原始文件，避免分支指针漂移
+- **合并策略（按行去重）**：以 `td` 的行序为主，将 `tdesktop` 中不在 `td` 中的行按原样追加（逐行完全匹配去重）。
+- **头部注释**：顶部加入本次合并元信息（来源 repo、path、commit、时间、大小等）。
+- **只在变更时提交与发版**：降低无意义提交与 Release 噪音。
+- **可复现**：下载使用 **以 commit SHA 固定**的原始文件，避免分支指针漂移。
 
 ---
 
@@ -45,7 +32,7 @@
 ├─ merged.tl.sha256          # 根目录 SHA256
 ├─ schemas/
 │  ├─ merged.tl              # 同步保留一份
-│  ├─ latest.tl              # 单源里“提交时间更新”的那个
+│  ├─ latest.tl              # 现在总是 td 的快照（主来源）
 │  ├─ CHANGELOG.txt          # 仅在变更时追加
 │  ├─ metadata.json          # 本次运行元数据（来源、SHA、提交时间等）
 │  ├─ td-<sha7>.tl           # tdlib 快照
@@ -90,14 +77,9 @@ python fetch_and_merge_tl.py --outdir ./schemas
 
 ## 合并细节
 
-- **签名生成**：
-  - 有 `#id`：`<name>#<id_hex>|<section>`
-  - 无 `#id`：`<name>|<normalized_params>|<result>|<section>`
-- **冲突处理**：若同一签名在两源的 **raw** 不同，保留**较新来源**的版本
-- **注释化规则**：匹配 `^\s*-+\s*types\s*-+\s*$`（大小写不敏感），将其**上方**所有行加前缀 `// `（已有 `//` 的跳过）
-
-> 如需把分隔标记行的“行尾注释”也纳入匹配（例如 `---types--- // note`），可把正则改为：  
-> `^\s*-+\s*types\s*-+\s*(?://.*)?$`
+- **基础**：本工具当前实现为“按行去重合并”。
+- **顺序**：保留 `td` 的行顺序；将 `tdesktop` 中不存在于 `td` 的行追加到尾部。
+- **冲突**：逐行完全匹配判断；若同一行在两源内容不同，则由于“按行去重”的策略，不会覆盖 `td`，需要人工检视差异（见 `schemas/CHANGELOG.txt`）。
 
 ---
 

@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
 Fetch and merge the latest Telegram TL schema from two sources, and append a changelog
-whenever the merged output changes. Additionally, in the merged output, detect the
-line matching /-+types-+/i (e.g., "--types--") and comment out *everything above it*.
+whenever the merged output changes.
 
 Outputs:
-- merged.tl: merged + postprocessed (everything above the -types- line is commented)
+- merged.tl: merged result
 
 Other details are same as previous version.
 """
@@ -22,7 +21,6 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 import difflib
-import re
 
 GITHUB_API = "https://api.github.com"
 RAW_BASE = "https://raw.githubusercontent.com"
@@ -115,40 +113,9 @@ def header_block(infos: List[FileInfo]) -> str:
     ]
     for i in infos:
         lines.append(f"// source: {i.owner}/{i.repo}/{i.path}@{i.sha[:7]}")
-    lines.append("// merge strategy: newer file order retained; unique lines from older appended; exact-line de-dup.")
+    lines.append("// merge strategy: td (primary) order retained; unique lines from tdesktop appended; exact-line de-dup.")
     lines.append("")
     return "\n".join(lines)
-
-
-def comment_above_types(all_lines: List[str]) -> List[str]:
-    """
-    Find a line that matches /-+types-+/i (allowing spaces around) and comment out
-    everything above that line by prefixing with // (unless already commented).
-    """
-    pattern = re.compile(r'^\s*-+types-+\s*$', re.IGNORECASE)
-    idx = None
-    for i, line in enumerate(all_lines):
-        if pattern.match(line):
-            idx = i
-            break
-
-    if idx is None:
-        # No marker found; return unchanged
-        return all_lines
-
-    out = []
-    for i, line in enumerate(all_lines):
-        if i < idx:
-            stripped = line.lstrip()
-            if stripped.startswith("//"):
-                out.append(line)  # already commented
-            else:
-                # preserve leading indentation
-                leading = line[:len(line) - len(line.lstrip("\t "))]
-                out.append(f"{leading}// {line[len(leading):]}")
-        else:
-            out.append(line)
-    return out, idx
 
 
 def diff_stats(old: str, new: str) -> Tuple[int, int]:
@@ -172,7 +139,7 @@ def short_unified_diff(old: str, new: str, n_context: int = 3, max_lines: int = 
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Fetch, merge TL schemas, comment above -types-, and append changelog on updates.")
+    parser = argparse.ArgumentParser(description="Fetch and merge TL schemas (td primary), and append changelog on updates.")
     parser.add_argument("--outdir", default="schemas", help="Output directory (default: ./schemas)")
     args = parser.parse_args(argv)
 
@@ -195,26 +162,23 @@ def main(argv=None) -> int:
         ))
         print(f"[OK] saved {fname} ({len(content)} bytes)")
 
-    # Newer/older
-    newer_idx = max(range(len(infos)), key=lambda i: infos[i].commit_date_iso)
-    newer = infos[newer_idx]
-    older = infos[1 - newer_idx]
+    # Determine primary (td) and supplementary (tdesktop)
+    primary_idx = next((i for i, info in enumerate(infos) if info.repo == "td"), 0)
+    primary = infos[primary_idx]
+    supplement = infos[1 - primary_idx]
 
-    # latest.tl
-    write_bytes(outdir / "latest.tl", (outdir / newer.filename).read_bytes())
+    # latest.tl (now represents the primary td snapshot)
+    write_bytes(outdir / "latest.tl", (outdir / primary.filename).read_bytes())
 
     # Merge raw text
-    newer_text = (outdir / newer.filename).read_text(encoding="utf-8", errors="replace").splitlines(True)
-    older_text = (outdir / older.filename).read_text(encoding="utf-8", errors="replace").splitlines(True)
-    merged_lines = merge_tl(newer_text, older_text)
+    primary_text = (outdir / primary.filename).read_text(encoding="utf-8", errors="replace").splitlines(True)
+    supplement_text = (outdir / supplement.filename).read_text(encoding="utf-8", errors="replace").splitlines(True)
+    merged_lines = merge_tl(primary_text, supplement_text)
 
     # Add header
-    merged_lines = [header_block([newer, older])] + merged_lines
+    merged_lines = [header_block([primary, supplement])] + merged_lines
 
-    # Postprocess: comment everything above the first -types- marker
-    commented_result, marker_idx = comment_above_types(merged_lines)
-
-    merged_text = "".join(commented_result)
+    merged_text = "".join(merged_lines)
 
     # Write merged.tl if changed and append CHANGELOG
     merged_path = outdir / "merged.tl"
@@ -226,18 +190,17 @@ def main(argv=None) -> int:
         with open(outdir / "CHANGELOG.txt", "a", encoding="utf-8") as log:
             ts = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00","Z")
             log.write(f"[{ts}] merged.tl updated\n")
-            log.write(f" marker_line={marker_idx+1 if marker_idx is not None else 'N/A'}  newer={newer.repo}@{newer.sha[:7]} ({newer.commit_date_iso})  older={older.repo}@{older.sha[:7]} ({older.commit_date_iso})  +{added} -{removed}\n")
+            log.write(f" primary={primary.repo}@{primary.sha[:7]} ({primary.commit_date_iso})  supplement={supplement.repo}@{supplement.sha[:7]} ({supplement.commit_date_iso})  +{added} -{removed}\n")
             log.write(short_unified_diff(old_text, merged_text) + "\n")
-        print(f"[OK] merged.tl updated; CHANGELOG.txt appended (marker at line {marker_idx+1 if marker_idx is not None else 'N/A'})")
+        print(f"[OK] merged.tl updated; CHANGELOG.txt appended")
     else:
         print("[OK] merged.tl unchanged (no changelog entry)")
 
     # metadata
     meta = {
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00","Z"),
-        "latest_index": newer_idx,
-        "entries": [dict(owner=i.owner, repo=i.repo, path=i.path, ref=i.ref, sha=i.sha, commit_date=i.commit_date_iso, size=i.size, etag=i.etag, file=i.filename) for i in infos],
-        "postprocess": {"comment_above_types_regex": r"^\s*-+types-+\s*$", "case_insensitive": True}
+        "latest_index": primary_idx,
+        "entries": [dict(owner=i.owner, repo=i.repo, path=i.path, ref=i.ref, sha=i.sha, commit_date=i.commit_date_iso, size=i.size, etag=i.etag, file=i.filename) for i in infos]
     }
     write_bytes(outdir / "metadata.json", json.dumps(meta, indent=2, ensure_ascii=False).encode("utf-8"))
     print("[OK] metadata.json written")
