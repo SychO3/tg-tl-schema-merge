@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2025-10-15T12:27:59.254948Z",
-  "latest_index": 0,
+  "generated_at_utc": "2025-10-15T12:46:39.462199Z",
+  "latest_index": 1,
   "entries": [
     {
       "owner": "telegramdesktop",
@@ -24,9 +24,5 @@
       "etag": "\"6b5bcf2b18347532ee84da48eab1910925f964ab9e88c912cb550ce484c3474f\"",
       "file": "td-948de00.tl"
     }
-  ],
-  "postprocess": {
-    "comment_above_types_regex": "^\\s*-+types-+\\s*$",
-    "case_insensitive": true
-  }
+  ]
 }
