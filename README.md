@@ -4,7 +4,7 @@
 
 > 自动从 **tdlib (td)** 与 **tdesktop** 拉取 Telegram TL schema，进行合并，并在**内容变更**时：
 > - 生成 `merged.tl`（仓库根目录与 `schemas/` 中各一份）
-> - 生成 `merged.tl.sha256`（根目录）
+> - 生成 `schemas/merged.tl.sha256`
 > - 追加 `schemas/CHANGELOG.txt`（含统一 diff 预览）
 > - 发布 GitHub **Release**（附带 `merged.tl` 与其 SHA256）
 
@@ -29,9 +29,10 @@
 ```
 .
 ├─ merged.tl                 # 根目录合并结果（便于直接引用）
-├─ merged.tl.sha256          # 根目录 SHA256
+├─ merged.tl.sha256          # 根目录 SHA256（如果你运行了根目录版脚本）
 ├─ schemas/
-│  ├─ merged.tl              # 同步保留一份
+│  ├─ merged.tl              # 合并结果
+│  ├─ merged.tl.sha256       # SHA256 校验
 │  ├─ latest.tl              # 现在总是 td 的快照（主来源）
 │  ├─ CHANGELOG.txt          # 仅在变更时追加
 │  ├─ metadata.json          # 本次运行元数据（来源、SHA、提交时间等）

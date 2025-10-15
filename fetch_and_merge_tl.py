@@ -21,6 +21,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 import difflib
+import hashlib
 
 GITHUB_API = "https://api.github.com"
 RAW_BASE = "https://raw.githubusercontent.com"
@@ -195,6 +196,11 @@ def main(argv=None) -> int:
         print(f"[OK] merged.tl updated; CHANGELOG.txt appended")
     else:
         print("[OK] merged.tl unchanged (no changelog entry)")
+
+    # Write SHA256 for merged.tl (always ensure it exists for CI workflow)
+    sha256 = hashlib.sha256((outdir / "merged.tl").read_bytes()).hexdigest()
+    with open(outdir / "merged.tl.sha256", "w", encoding="utf-8") as f:
+        f.write(f"{sha256}  merged.tl\n")
 
     # metadata
     meta = {
