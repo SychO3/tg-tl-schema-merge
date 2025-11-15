@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2025-10-15T12:52:45.758744Z",
+  "generated_at_utc": "2025-11-15T16:01:38.068278Z",
   "latest_index": 1,
   "entries": [
     {
@@ -7,11 +7,11 @@
       "repo": "tdesktop",
       "path": "Telegram/SourceFiles/mtproto/scheme/api.tl",
       "ref": "dev",
-      "sha": "5e40d60e34efaa274c23e75b9e206f92e5764517",
-      "commit_date": "2025-10-10T05:27:00Z",
-      "size": 249248,
-      "etag": "\"d3dba221d9fd22ea8751ac9d64821af2ef3a364152941726202ae1058afb7c75\"",
-      "file": "tdesktop-5e40d60.tl"
+      "sha": "cab93600dd263ae52bb22c83805ad3bb3c28034b",
+      "commit_date": "2025-11-15T08:00:01Z",
+      "size": 254125,
+      "etag": "\"bb72d757f5fb230e718e56c357e85607df898ad805ed6cd86acf0bc9cf75ae8b\"",
+      "file": "tdesktop-cab9360.tl"
     },
     {
       "owner": "tdlib",
