@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2025-11-15T16:01:38.068278Z",
+  "generated_at_utc": "2025-11-26T15:01:49.096893Z",
   "latest_index": 1,
   "entries": [
     {
@@ -18,11 +18,11 @@
       "repo": "td",
       "path": "td/generate/scheme/telegram_api.tl",
       "ref": "master",
-      "sha": "948de0062bcfba793e8050018f36136fa1978ad3",
-      "commit_date": "2025-09-19T10:34:05Z",
-      "size": 250296,
-      "etag": "\"6b5bcf2b18347532ee84da48eab1910925f964ab9e88c912cb550ce484c3474f\"",
-      "file": "td-948de00.tl"
+      "sha": "9cbccaf3cf0ed456a723463c305cc58dd7653fa1",
+      "commit_date": "2025-10-17T12:48:11Z",
+      "size": 252402,
+      "etag": "\"afd67c369e79f6eb72a1068c34d2619aeb3fd62a7050024eea9f441b233a087d\"",
+      "file": "td-9cbccaf.tl"
     }
   ]
 }
